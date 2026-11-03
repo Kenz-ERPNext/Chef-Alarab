@@ -147,7 +147,7 @@ doctype_js = {"Sales Invoice": "public/js/sales_invoice.js"}
 # }
 doc_events = {
 	"Sales Invoice": {
-		"before_validate": "chef_alarab.events.sales_invoice.apply_vat_included_rate",
+		"before_validate": "chef_alarab.events.sales_invoice.sync_inclusive_rate",
 	}
 }
 

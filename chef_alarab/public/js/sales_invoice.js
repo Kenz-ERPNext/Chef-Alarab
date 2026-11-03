@@ -1,20 +1,38 @@
 frappe.ui.form.on("Sales Invoice Item", {
 	custom_vat_included(frm, cdt, cdn) {
-		apply_vat_included_rate(frm, cdt, cdn);
+		const row = locals[cdt][cdn];
+		if (row.__syncing_vat || !flt(row.custom_vat_included)) return;
+
+		const vat_rate = get_item_vat_rate(frm, row);
+		const rate = flt(row.custom_vat_included / (1 + vat_rate / 100), precision("rate", row));
+		sync_value(row, "rate", rate);
+	},
+
+	rate(frm, cdt, cdn) {
+		update_inclusive_rate(frm, locals[cdt][cdn]);
 	},
 
 	item_tax_rate(frm, cdt, cdn) {
-		apply_vat_included_rate(frm, cdt, cdn);
+		update_inclusive_rate(frm, locals[cdt][cdn]);
 	},
 });
 
-function apply_vat_included_rate(frm, cdt, cdn) {
-	const row = locals[cdt][cdn];
-	if (!flt(row.custom_vat_included)) return;
+function update_inclusive_rate(frm, row) {
+	if (row.__syncing_vat) return;
 
 	const vat_rate = get_item_vat_rate(frm, row);
-	const rate = flt(row.custom_vat_included / (1 + vat_rate / 100), precision("rate", row));
-	frappe.model.set_value(cdt, cdn, "rate", rate);
+	const inclusive = flt(row.rate * (1 + vat_rate / 100), precision("custom_vat_included", row));
+	sync_value(row, "custom_vat_included", inclusive);
+}
+
+// Set one side without letting its change handler recalculate the other side (avoids rounding loops)
+function sync_value(row, fieldname, value) {
+	if (flt(row[fieldname]) === value) return;
+
+	row.__syncing_vat = true;
+	frappe.model.set_value(row.doctype, row.name, fieldname, value).then(() => {
+		row.__syncing_vat = false;
+	});
 }
 
 function get_item_vat_rate(frm, row) {

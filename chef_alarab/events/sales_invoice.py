@@ -3,14 +3,13 @@ import json
 from frappe.utils import flt
 
 
-def apply_vat_included_rate(doc, method=None):
-	"""Derive the tax-exclusive rate from the VAT-inclusive price entered on each item row."""
+def sync_inclusive_rate(doc, method=None):
+	"""Keep the VAT-inclusive rate in step with the item rate and the current taxes."""
 	for item in doc.items:
-		if not flt(item.custom_vat_included):
-			continue
-
 		vat_rate = get_item_vat_rate(doc, item)
-		item.rate = flt(flt(item.custom_vat_included) / (1 + vat_rate / 100), item.precision("rate"))
+		item.custom_vat_included = flt(
+			flt(item.rate) * (1 + vat_rate / 100), item.precision("custom_vat_included")
+		)
 
 
 def get_item_vat_rate(doc, item):

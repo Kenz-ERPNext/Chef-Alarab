@@ -5,3 +5,5 @@
 tags
 node_modules
 __pycache__
+# Local design docs (keep locally, do not push)
+docs/

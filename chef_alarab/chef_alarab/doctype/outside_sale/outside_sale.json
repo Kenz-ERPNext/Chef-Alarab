@@ -1,0 +1,119 @@
+{
+ "actions": [],
+ "creation": "2026-11-10 21:00:00.000000",
+ "custom": 0,
+ "description": "Sales made outside the system (no Sales Invoice). Shown only in the Daily Profit Summary report, not in accounts.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "sale_date",
+  "company",
+  "col_1",
+  "amount",
+  "currency",
+  "sec_note",
+  "note"
+ ],
+ "fields": [
+  {
+   "default": "Today",
+   "fieldname": "sale_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "remember_last_selected_value": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "col_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount",
+   "non_negative": 1,
+   "options": "currency",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "company.default_currency",
+   "fieldname": "currency",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Currency",
+   "options": "Currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sec_note",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "note",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Note"
+  }
+ ],
+ "links": [],
+ "modified": "2026-11-10 21:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Chef Alarab",
+ "name": "Outside Sale",
+ "naming_rule": "By script",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "sale_date",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "sale_date",
+ "track_changes": 1
+}

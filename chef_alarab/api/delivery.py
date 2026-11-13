@@ -155,6 +155,21 @@ def create_sales_invoice(delivery_note: str, rates=None):
 
 
 @frappe.whitelist()
+def submit_sales_invoice(name: str):
+	"""Approve a draft Sales Invoice: Accounts has checked the rates. An item with no rate is refused."""
+	require_role(ACCOUNTS_ROLES, _("submit the Sales Invoice"))
+	si = frappe.get_doc("Sales Invoice", name)
+	si.check_permission("write")
+	if si.docstatus != 0:
+		frappe.throw(_("Only a draft invoice can be submitted."))
+	missing = [d.item_name for d in si.items if not flt(d.rate)]
+	if missing:
+		frappe.throw(_("Rate is 0 for: {0}. Add the price in ERPNext before submitting.").format(", ".join(missing)))
+	si.submit()
+	return get_sales_invoice(si.name)
+
+
+@frappe.whitelist()
 def get_sales_invoice(name: str):
 	"""A Sales Invoice for the app: header, items with rate and amount, and the totals."""
 	require_role(ACCOUNTS_ROLES, _("see the Sales Invoice"))
@@ -163,14 +178,28 @@ def get_sales_invoice(name: str):
 	return {
 		"name": si.name,
 		"customer": si.customer_name,
+		"company": si.company,
+		"created_by": frappe.db.get_value("User", si.owner, "full_name") or si.owner,
 		"date": str(si.posting_date),
+		"due_date": str(si.due_date) if si.due_date else None,
 		"status": si.status,
 		"docstatus": si.docstatus,
+		"delivery_notes": sorted({d.delivery_note for d in si.items if d.delivery_note}),
+		"sales_orders": sorted({d.sales_order for d in si.items if d.sales_order}),
+		"total_qty": flt(si.total_qty, 3),
 		"net_total": flt(si.net_total),
 		"vat": flt(si.total_taxes_and_charges),
 		"grand_total": flt(si.grand_total),
+		"outstanding": flt(si.outstanding_amount),
 		"items": [
-			{"item_name": d.item_name, "qty": flt(d.qty, 3), "uom": d.uom, "rate": flt(d.rate), "amount": flt(d.net_amount)}
+			{
+				"item_code": d.item_code,
+				"item_name": d.item_name,
+				"qty": flt(d.qty, 3),
+				"uom": d.uom,
+				"rate": flt(d.rate),
+				"amount": flt(d.net_amount),
+			}
 			for d in si.items
 		],
 	}

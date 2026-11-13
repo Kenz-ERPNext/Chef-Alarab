@@ -23,17 +23,34 @@ def load(name):
 
 
 def details(doc):
+	lines = [d.custom_dps_supplier_line for d in doc.items if d.get("custom_dps_supplier_line")]
+	sheet = frappe.db.get_value("Daily Purchase Sheet Supplier Line", lines[0], "parent") if lines else None
 	return {
 		"name": doc.name,
 		"supplier": doc.supplier_name or doc.supplier,
+		"company": doc.company,
+		"created_by": frappe.db.get_value("User", doc.owner, "full_name") or doc.owner,
 		"date": str(doc.posting_date),
+		"due_date": str(doc.due_date) if doc.due_date else None,
+		"bill_no": doc.bill_no,
+		"sheet": sheet,
 		"status": doc.status,
 		"docstatus": doc.docstatus,
+		"total_qty": flt(doc.total_qty, 3),
 		"net_total": flt(doc.net_total),
 		"vat": flt(doc.total_taxes_and_charges),
 		"grand_total": flt(doc.grand_total),
+		"outstanding": flt(doc.outstanding_amount),
 		"items": [
-			{"row": d.name, "item_name": d.item_name, "qty": flt(d.qty, 3), "uom": d.uom, "rate": flt(d.rate), "amount": flt(d.net_amount)}
+			{
+				"row": d.name,
+				"item_code": d.item_code,
+				"item_name": d.item_name,
+				"qty": flt(d.qty, 3),
+				"uom": d.uom,
+				"rate": flt(d.rate),
+				"amount": flt(d.net_amount),
+			}
 			for d in doc.items
 		],
 	}

@@ -130,6 +130,10 @@ doctype_js = {"Sales Invoice": "public/js/sales_invoice.js"}
 # ---------------
 # Override standard doctype classes
 
+override_doctype_class = {
+	"Purchase Invoice": "chef_alarab.overrides.purchase_invoice.PurchaseInvoice",
+}
+
 # override_doctype_class = {
 # 	"ToDo": "custom_app.overrides.CustomToDo"
 # }
@@ -147,8 +151,26 @@ doctype_js = {"Sales Invoice": "public/js/sales_invoice.js"}
 # }
 doc_events = {
 	"Sales Invoice": {
+		"before_insert": "chef_alarab.events.sales_invoice_price.apply_current_price",
 		"before_validate": "chef_alarab.events.sales_invoice.sync_inclusive_rate",
-	}
+		"before_submit": "chef_alarab.events.sales_invoice_price.block_zero_rate",
+		"validate": "chef_alarab.events.sales_invoice_price.hide_zero_billing_warning",
+		"on_submit": "chef_alarab.events.sales_invoice_price.hide_zero_billing_warning",
+	},
+	"Purchase Receipt": {
+		"on_submit": "chef_alarab.chef_alarab.doctype.daily_purchase_sheet.purchase_receipt.link_item_rows",
+		"on_cancel": "chef_alarab.chef_alarab.doctype.daily_purchase_sheet.purchase_receipt.unlink_item_rows",
+	},
+	"Purchase Invoice": {
+		# Receipt rows are at rate 0, so ERPNext warns it cannot check over billing.
+		"validate": "chef_alarab.events.sales_invoice_price.hide_zero_billing_warning",
+		"before_submit": "chef_alarab.chef_alarab.doctype.daily_purchase_sheet.purchase_invoice.block_zero_rate",
+		"on_submit": [
+			"chef_alarab.chef_alarab.doctype.daily_purchase_sheet.purchase_invoice.link_supplier_lines",
+			"chef_alarab.events.sales_invoice_price.hide_zero_billing_warning",
+		],
+		"on_cancel": "chef_alarab.chef_alarab.doctype.daily_purchase_sheet.purchase_invoice.unlink_supplier_lines",
+	},
 }
 
 # Scheduled Tasks
@@ -257,6 +279,18 @@ doc_events = {
 fixtures = [
 	{
 		"dt": "Custom Field",
-		"filters": [["name", "in", ["Sales Invoice Item-custom_vat_included"]]],
+		"filters": [
+			[
+				"name",
+				"in",
+				[
+					"Sales Invoice Item-custom_vat_included",
+					"Purchase Invoice-custom_daily_purchase_sheet",
+					"Purchase Invoice Item-custom_dps_supplier_line",
+					"Purchase Receipt-custom_daily_purchase_sheet",
+					"Purchase Receipt Item-custom_dps_item_row",
+				],
+			]
+		],
 	}
 ]

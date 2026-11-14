@@ -14,6 +14,8 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
+from chef_alarab.chef_alarab.doctype.daily_purchase_sheet.daily_purchase_sheet import uom_factor
+
 MARKET_SUPPLIER = "Market Purchase"
 
 
@@ -58,7 +60,7 @@ def make_purchase_receipt(sheet):
 				"item_code": row.item_code,
 				"qty": row.received_qty,
 				"uom": row.uom,
-				"conversion_factor": 1,
+				"conversion_factor": uom_factor(row.item_code, row.uom),
 				"warehouse": sheet.set_warehouse,
 				"allow_zero_valuation_rate": 1,
 				"custom_dps_item_row": row.name,

@@ -15,6 +15,8 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
+from chef_alarab.chef_alarab.doctype.daily_purchase_sheet.daily_purchase_sheet import uom_factor
+
 
 def make_invoices(sheet, line_names=None):
 	if sheet.docstatus != 1:
@@ -65,7 +67,7 @@ def make_invoice(sheet, supplier, lines):
 				"item_code": line.item_code,
 				"qty": line.qty,
 				"uom": line.uom,
-				"conversion_factor": 1,
+				"conversion_factor": uom_factor(line.item_code, line.uom),
 				"rate": line.rate,
 				"purchase_receipt": row.purchase_receipt if row else None,
 				"pr_detail": row.pr_item if row else None,
@@ -153,9 +155,9 @@ def update_sheet(doc, invoice):
 			continue
 		line.purchase_invoice = invoice
 		if invoice:
-			# The invoice is the final word on what we bought and at what price (stock UOM).
-			line.qty = flt(item.stock_qty)
-			line.rate = flt(item.rate) / flt(item.conversion_factor or 1)
+			# The invoice is the final word on what we bought and at what price (in the line's own unit).
+			line.qty = flt(item.qty)
+			line.rate = flt(item.rate)
 	sheet.calculate_totals()
 	for row in sheet.supplier_lines + sheet.items:
 		row.db_update()

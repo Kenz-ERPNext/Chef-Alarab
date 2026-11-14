@@ -18,6 +18,33 @@ def require_role(roles, action):
 		frappe.throw(_("You are not allowed to {0}.").format(action), frappe.PermissionError)
 
 
+def uom_factor(item_code, uom):
+	"""How many base (stock) units one `uom` of the item is: from the Item's UOM table, else 1 (as ERPNext does on an order)."""
+	return flt(frappe.db.get_value("UOM Conversion Detail", {"parent": item_code, "uom": uom}, "conversion_factor")) or 1.0
+
+
+def summarise_rows(rows):
+	"""Total qty per item with the customer breakdown: {(item_code, uom): qty}, {key: {customer: qty}}, {key: name}.
+
+	An item keeps the unit the Sales Orders were made in (Box stays Box). When orders use different units
+	for the same item they are added up in the item's base (stock) unit instead."""
+	units = defaultdict(set)
+	for r in rows:
+		units[r.item_code].add(r.uom)
+	totals, by_customer, names = defaultdict(float), defaultdict(lambda: defaultdict(float)), {}
+	for r in rows:
+		same = len(units[r.item_code]) == 1
+		key = (r.item_code, r.uom if same else r.stock_uom)
+		qty = flt(r.qty if same else r.stock_qty)
+		totals[key] += qty
+		by_customer[key][r.customer_name] += qty
+		names[key] = r.item_name
+	breakdown = {
+		key: " · ".join(f"{c} {flt(q, 3):g}" for c, q in custs.items()) for key, custs in by_customer.items()
+	}
+	return totals, breakdown, names
+
+
 class DailyPurchaseSheet(Document):
 	"""One sheet per delivery date: what to buy tonight, who buys it, what arrived, what was billed."""
 
@@ -88,19 +115,12 @@ class DailyPurchaseSheet(Document):
 		rows = self.get_pending_so_items()
 
 		# Keep the staff already assigned when fetching again.
-		previous = {(d.item_code, d.uom): d for d in self.items}
-		totals = defaultdict(float)
-		by_customer = defaultdict(lambda: defaultdict(float))
-		names = {}
-		for r in rows:
-			key = (r.item_code, r.stock_uom)
-			totals[key] += r.pending_qty
-			by_customer[key][r.customer_name] += r.pending_qty
-			names[key] = r.item_name
+		previous = {d.item_code: d for d in self.items}
+		totals, breakdown, names = summarise_rows(rows)
 
 		self.set("items", [])
 		for key in sorted(totals, key=lambda k: names[k]):
-			old = previous.get(key)
+			old = previous.get(key[0])
 			self.append(
 				"items",
 				{
@@ -108,9 +128,7 @@ class DailyPurchaseSheet(Document):
 					"item_name": names[key],
 					"uom": key[1],
 					"required_qty": flt(totals[key], 3),
-					"customer_breakdown": " · ".join(
-						f"{c} {flt(q, 3):g}" for c, q in by_customer[key].items()
-					),
+					"customer_breakdown": breakdown[key],
 					"assigned_to": old.assigned_to if old else None,
 				},
 			)
@@ -147,13 +165,15 @@ class DailyPurchaseSheet(Document):
 			self.append("sales_orders", {"sales_order": so})
 
 		totals, breakdown, names = self.summarise_orders([d.sales_order for d in self.sales_orders])
-		rows = {(d.item_code, d.uom): d for d in self.items}
+		rows = {d.item_code: d for d in self.items}
 		new_items = 0
 		for key in sorted(totals, key=lambda k: names[k]):
-			row = rows.get(key)
+			row = rows.get(key[0])
 			if not row:
 				row = self.append("items", {"item_code": key[0], "item_name": names[key], "uom": key[1]})
 				new_items += 1
+			elif row.uom != key[1] and not (row.received_qty or row.purchase_receipt):
+				row.uom = key[1]  # a new order used another unit; nothing was bought in the old one yet
 			row.required_qty = flt(totals[key], 3)
 			row.customer_breakdown = breakdown[key]
 
@@ -162,11 +182,11 @@ class DailyPurchaseSheet(Document):
 		return {"sales_orders": len(new_orders), "new_items": new_items}
 
 	def summarise_orders(self, sales_orders):
-		"""Ordered qty (stock UOM) per item for the given Sales Orders, with customer breakdown."""
+		"""Ordered qty per item for the given Sales Orders, with customer breakdown. Unit: see summarise_rows."""
 		rows = frappe.db.sql(
 			"""
-			SELECT soi.item_code, soi.item_name, soi.stock_uom, so.customer_name,
-				soi.qty * soi.conversion_factor AS qty
+			SELECT soi.item_code, soi.item_name, soi.uom, soi.stock_uom, so.customer_name,
+				soi.qty, soi.qty * soi.conversion_factor AS stock_qty
 			FROM `tabSales Order Item` soi
 			JOIN `tabSales Order` so ON so.name = soi.parent
 			WHERE so.name IN %(orders)s AND soi.delivery_date = %(date)s
@@ -174,16 +194,7 @@ class DailyPurchaseSheet(Document):
 			{"orders": tuple(sales_orders), "date": self.purchase_date},
 			as_dict=True,
 		)
-		totals, by_customer, names = defaultdict(float), defaultdict(lambda: defaultdict(float)), {}
-		for r in rows:
-			key = (r.item_code, r.stock_uom)
-			totals[key] += r.qty
-			by_customer[key][r.customer_name] += r.qty
-			names[key] = r.item_name
-		breakdown = {
-			key: " · ".join(f"{c} {flt(q, 3):g}" for c, q in custs.items()) for key, custs in by_customer.items()
-		}
-		return totals, breakdown, names
+		return summarise_rows(rows)
 
 	@frappe.whitelist()
 	def create_purchase_receipt(self):
@@ -202,12 +213,13 @@ class DailyPurchaseSheet(Document):
 		return make_invoices(self, frappe.parse_json(line_names) if line_names else None)
 
 	def get_pending_so_items(self):
-		"""Open SO lines for this date and company, not yet in another active sheet. Qty in stock UOM."""
+		"""Open SO lines for this date and company, not yet in another active sheet. Qty in the order's unit and in stock UOM."""
 		return frappe.db.sql(
 			"""
-			SELECT soi.item_code, soi.item_name, soi.stock_uom, so.name AS sales_order,
+			SELECT soi.item_code, soi.item_name, soi.uom, soi.stock_uom, so.name AS sales_order,
 				so.customer_name,
-				(soi.qty - soi.delivered_qty) * soi.conversion_factor AS pending_qty
+				soi.qty - soi.delivered_qty AS qty,
+				(soi.qty - soi.delivered_qty) * soi.conversion_factor AS stock_qty
 			FROM `tabSales Order Item` soi
 			JOIN `tabSales Order` so ON so.name = soi.parent
 			WHERE so.docstatus = 1

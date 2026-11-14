@@ -126,23 +126,6 @@ def default_tax_template():
 	return rows[0][0] if rows else None
 
 
-def item_uoms(item_code):
-	"""{unit: conversion factor to the stock unit} of an item: its own unit plus the units set up in the Item."""
-	factors = {frappe.db.get_value("Item", item_code, "stock_uom"): 1.0}
-	for r in frappe.get_all("UOM Conversion Detail", filters={"parent": item_code}, fields=["uom", "conversion_factor"]):
-		factors.setdefault(r.uom, flt(r.conversion_factor) or 1.0)
-	return factors
-
-
-@frappe.whitelist()
-def get_item_uoms(item_code: str):
-	"""Units this item can be ordered in (own unit first), for the unit picker on a new order."""
-	require_role(ACCOUNTS_ROLES, _("take orders"))
-	factors = item_uoms(item_code)
-	own = frappe.db.get_value("Item", item_code, "stock_uom")
-	return [{"uom": u, "factor": f} for u, f in sorted(factors.items(), key=lambda x: (x[0] != own, x[0]))]
-
-
 @frappe.whitelist()
 def create_item(item_name: str, uom: str = DEFAULT_UOM, item_group: str = DEFAULT_GROUP):
 	"""New item the shop does not stock (Maintain Stock off), ready to order."""
@@ -173,7 +156,7 @@ def create_item(item_name: str, uom: str = DEFAULT_UOM, item_group: str = DEFAUL
 
 @frappe.whitelist()
 def create_sales_order(customer: str, delivery_date: str, items, submit: int = 1):
-	"""Sales Order for the delivery date. items = [{item_code, qty, uom?}]; uom defaults to the item's own unit. No rate (set on the invoice)."""
+	"""Sales Order for the delivery date. items = [{item_code, qty, uom?}]; any UOM, defaults to the item's own unit. No rate (set on the invoice)."""
 	require_role(ACCOUNTS_ROLES, _("take orders"))
 	lines = [d for d in frappe.parse_json(items) if flt(d.get("qty")) > 0]
 	if not lines:
@@ -190,10 +173,9 @@ def create_sales_order(customer: str, delivery_date: str, items, submit: int = 1
 	for d in lines:
 		row = {"item_code": d["item_code"], "qty": flt(d["qty"]), "delivery_date": getdate(delivery_date)}
 		if d.get("uom"):
-			factors = item_uoms(d["item_code"])
-			if d["uom"] not in factors:
-				frappe.throw(_("Unit {0} is not set up for item {1}.").format(d["uom"], d["item_code"]))
-			row.update({"uom": d["uom"], "conversion_factor": factors[d["uom"]]})
+			if not frappe.db.exists("UOM", d["uom"]):
+				frappe.throw(_("Unit {0} does not exist.").format(d["uom"]))
+			row["uom"] = d["uom"]  # like the desk form: ERPNext fills the conversion factor
 		so.append("items", row)
 	apply_default_sales_taxes(so)
 	so.insert()

@@ -81,9 +81,9 @@ def get_orders(date):
 			COUNT(DISTINCT so.name) AS total,
 			COUNT(DISTINCT IF(so.docstatus = 1, so.name, NULL)) AS submitted,
 			COUNT(DISTINCT IF(so.docstatus = 1 AND so.per_delivered >= 100, so.name, NULL)) AS delivered,
-			SUM(IF(so.docstatus = 1, (soi.qty - soi.delivered_qty) * soi.conversion_factor, 0)) AS pending_qty,
-			COUNT(DISTINCT soi.stock_uom) AS uoms,
-			MAX(soi.stock_uom) AS uom
+			SUM(IF(so.docstatus = 1, (soi.qty - soi.delivered_qty), 0)) AS pending_qty,
+			COUNT(DISTINCT soi.uom) AS uoms,
+			MAX(soi.uom) AS uom
 		FROM `tabSales Order` so
 		JOIN `tabSales Order Item` soi ON soi.parent = so.name
 		WHERE so.docstatus < 2 AND soi.delivery_date = %s AND so.status != 'Closed'

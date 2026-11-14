@@ -25,7 +25,7 @@ frappe = ">=15.0.0,<16.0.0"
 
 # These apt dependencies will be installed from Ubuntu repositories when you host your app on Frappe Cloud
 [deploy.dependencies.apt]
-packages = []
+packages = ["poppler-utils"]  # pdftoppm: the app turns printed PDFs into pictures for the phone's Gallery
 
 [tool.ruff]
 line-length = 110

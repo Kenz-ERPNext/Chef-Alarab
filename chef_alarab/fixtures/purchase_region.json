@@ -1,0 +1,30 @@
+[
+ {
+  "docstatus": 0,
+  "doctype": "Purchase Region",
+  "region_name": "Jeddah Haraj",
+  "disabled": 0,
+  "name": "Jeddah Haraj"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Purchase Region",
+  "region_name": "Sharafiyah Haraj",
+  "disabled": 0,
+  "name": "Sharafiyah Haraj"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Purchase Region",
+  "region_name": "Kilo 14 Haraj",
+  "disabled": 0,
+  "name": "Kilo 14 Haraj"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Purchase Region",
+  "region_name": "Central Market (Halaqa)",
+  "disabled": 0,
+  "name": "Central Market (Halaqa)"
+ }
+]

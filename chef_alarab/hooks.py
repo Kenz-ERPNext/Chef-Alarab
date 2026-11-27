@@ -257,6 +257,17 @@ doc_events = {
 fixtures = [
 	{
 		"dt": "Custom Field",
-		"filters": [["name", "in", ["Sales Invoice Item-custom_vat_included", "UOM-custom_description"]]],
-	}
+		"filters": [
+			[
+				"name",
+				"in",
+				[
+					"Sales Invoice Item-custom_vat_included",
+					"UOM-custom_description",
+					"Purchase Invoice-custom_purchase_region",
+				],
+			]
+		],
+	},
+	{"dt": "Purchase Region"},
 ]

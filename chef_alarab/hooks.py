@@ -272,5 +272,4 @@ fixtures = [
 			]
 		],
 	},
-	{"dt": "Purchase Region"},
 ]

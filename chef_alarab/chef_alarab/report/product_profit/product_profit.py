@@ -3,7 +3,8 @@
 """Profit on what was sold: per product, per customer, per UOM.
 
 Stock is not tracked, so ERPNext has no cost for a sale. Here the cost comes from purchases:
-- Sales = submitted Sales Invoices in the period (net of VAT).
+- Sales = submitted Sales Invoices in the period (net of VAT). The "Include Draft Sales" and
+  "Include Draft Purchase" filters add draft Sales / Purchase Invoices.
 - Cost rate = average of the item's last 2 Purchase Invoice rates (per stock unit, net of VAT)
   on or before the sale date.
 - Cost = stock qty sold x cost rate, so every UOM (Box, Bag 20kg ...) is costed through the
@@ -27,12 +28,11 @@ def execute(filters=None):
 	for d in lines:
 		key = (d.item_code, d.posting_date)
 		if key not in purchases:
-			purchases[key] = last_purchase_rates(d.item_code, d.posting_date)
+			purchases[key] = last_purchase_rates(d.item_code, d.posting_date, filters.draft_purchase)
 		d.purchases = purchases[key]
 		rates = [rate for _date, rate in d.purchases]
 		d.cost_missing = not rates
 		d.stock_rate = sum(rates) / len(rates) if rates else 0
-		d.last_rates = rates
 		d.cost = flt(d.stock_qty) * d.stock_rate
 		d.profit = flt(d.sales) - d.cost
 
@@ -44,7 +44,7 @@ def execute(filters=None):
 
 def get_sales_lines(filters):
 	conditions = [
-		"si.docstatus = 1",
+		"si.docstatus < 2" if filters.draft_sales else "si.docstatus = 1",
 		"si.company = %(company)s",
 		"si.posting_date BETWEEN %(from_date)s AND %(to_date)s",
 	]
@@ -68,21 +68,27 @@ def get_sales_lines(filters):
 	)
 
 
-def last_purchase_rates(item_code, date):
-	"""The item's last 2 purchases as (date, rate per stock unit net of VAT), newest first."""
+def last_purchase_rates(item_code, date, include_draft=False):
+	"""The item's purchases on its last 2 purchase days as (date, rate per stock unit net of VAT), newest first.
+
+	When several bills fall on one day, that day's rate is the one on the bill entered last.
+	"""
 	rows = frappe.db.sql(
 		"""
 		SELECT pi.posting_date, pii.base_net_amount / pii.stock_qty
 		FROM `tabPurchase Invoice Item` pii
 		JOIN `tabPurchase Invoice` pi ON pi.name = pii.parent
-		WHERE pi.docstatus = 1 AND pi.is_return = 0 AND pii.item_code = %s
+		WHERE pi.docstatus IN %s AND pi.is_return = 0 AND pii.item_code = %s
 			AND pi.posting_date <= %s AND pii.stock_qty > 0
-		ORDER BY pi.posting_date DESC, pi.creation DESC
-		LIMIT %s
+		ORDER BY pi.posting_date DESC, pi.creation DESC, pii.idx DESC
+		LIMIT 100
 		""",
-		(item_code, date, LAST_PURCHASES),
+		((0, 1) if include_draft else (1,), item_code, date),
 	)
-	return [(r[0], flt(r[1])) for r in rows]
+	per_day = {}
+	for day, rate in rows:
+		per_day.setdefault(day, flt(rate))  # rows are newest first: keep the day's last bill
+	return list(per_day.items())[:LAST_PURCHASES]
 
 
 def total_of(rows):
@@ -111,7 +117,9 @@ def get_rows(lines):
 				**product,
 				"name": items[0].item_name,
 				"uom": next(iter(uoms)) if len(uoms) == 1 else _("Mixed"),
-				"last_rates": " · ".join(f"{r:,.2f}" for r in newest.last_rates) or _("Not bought"),
+				# "12.00 (27-11) · 13.00 (26-11)": newest first, each with its purchase date.
+				"last_rates": " · ".join(f"{r:,.2f} ({dt.strftime('%d-%m')})" for dt, r in newest.purchases)
+				or _("Not bought"),
 				**(purchase_profits(items, newest.purchases) if len(uoms) == 1 else {}),
 				"indent": 0,
 				"row_type": "product",
@@ -157,7 +165,7 @@ def get_columns():
 		col(_("UOM"), "uom", "Data", 90),
 		col(_("Qty"), "qty", "Float", 80),
 		col(_("Sales Rate"), "sales_rate"),
-		col(_("Last 2 Purchase Rates"), "last_rates", "Data", 190),
+		col(_("Last 2 Purchase Rates"), "last_rates", "Data", 230),
 		col(_("Profit/UOM · Last PI"), "purchase_profit_1", "Data", 170),
 		col(_("Profit/UOM · 2nd Last PI"), "purchase_profit_2", "Data", 190),
 	]

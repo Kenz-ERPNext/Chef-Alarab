@@ -28,6 +28,8 @@ frappe.query_reports["Product Profit"] = {
 		{ fieldname: "customer", label: __("Customer"), fieldtype: "Link", options: "Customer" },
 		{ fieldname: "item_code", label: __("Product"), fieldtype: "Link", options: "Item" },
 		{ fieldname: "sales_invoice", label: __("Sales Invoice"), fieldtype: "Link", options: "Sales Invoice" },
+		{ fieldname: "draft_sales", label: __("Include Draft Sales"), fieldtype: "Check", default: 1 },
+		{ fieldname: "draft_purchase", label: __("Include Draft Purchase"), fieldtype: "Check", default: 1 },
 	],
 	initial_depth: 0,
 	onload() {

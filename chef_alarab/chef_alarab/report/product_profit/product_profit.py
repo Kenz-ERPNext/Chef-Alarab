@@ -28,7 +28,9 @@ def execute(filters=None):
 	for d in lines:
 		key = (d.item_code, d.posting_date)
 		if key not in purchases:
-			purchases[key] = last_purchase_rates(d.item_code, d.posting_date, filters.draft_purchase)
+			purchases[key] = last_purchase_rates(
+				d.item_code, d.posting_date, filters.draft_purchase, filters.purchase_region
+			)
 		d.purchases = purchases[key]
 		rates = [rate for _date, rate in d.purchases]
 		d.cost_missing = not rates
@@ -68,10 +70,11 @@ def get_sales_lines(filters):
 	)
 
 
-def last_purchase_rates(item_code, date, include_draft=False):
+def last_purchase_rates(item_code, date, include_draft=False, region=None):
 	"""The item's purchases on its last 2 purchase days as (date, rate per stock unit net of VAT), newest first.
 
 	When several bills fall on one day, that day's rate is the one on the bill entered last.
+	With a region, only bills from that Purchase Region count.
 	"""
 	rows = frappe.db.sql(
 		"""
@@ -80,10 +83,11 @@ def last_purchase_rates(item_code, date, include_draft=False):
 		JOIN `tabPurchase Invoice` pi ON pi.name = pii.parent
 		WHERE pi.docstatus IN %s AND pi.is_return = 0 AND pii.item_code = %s
 			AND pi.posting_date <= %s AND pii.stock_qty > 0
+			AND (%s IS NULL OR pi.custom_purchase_region = %s)
 		ORDER BY pi.posting_date DESC, pi.creation DESC, pii.idx DESC
 		LIMIT 100
 		""",
-		((0, 1) if include_draft else (1,), item_code, date),
+		((0, 1) if include_draft else (1,), item_code, date, region or None, region or None),
 	)
 	per_day = {}
 	for day, rate in rows:

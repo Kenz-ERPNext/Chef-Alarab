@@ -86,6 +86,9 @@ doctype_js = {"Sales Invoice": "public/js/sales_invoice.js"}
 # before_install = "chef_alarab.install.before_install"
 # after_install = "chef_alarab.install.after_install"
 
+# Adds the "Reports" card to the Home workspace when it is missing (see home_reports.py).
+after_migrate = ["chef_alarab.home_reports.add_reports_card"]
+
 # Uninstallation
 # ------------
 
